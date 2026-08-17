@@ -46,7 +46,7 @@ url = "2"
 async-trait = "0.1"
 
 # MCP server (official Rust SDK: rmcp)
-rmcp = { version = "3", features = ["server"] }
+rmcp = { version = "3", features = ["server", "transport-io"] }
 schemars = "0.8"
 
 [dev-dependencies]
