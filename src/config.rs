@@ -192,6 +192,28 @@ fn parse_api_keys(raw: String) -> HashMap<String, String> {
     map
 }
 
+impl Config {
+    /// A valid in-memory configuration for tests (no env access).
+    #[cfg(test)]
+    pub fn test_default() -> Self {
+        Self {
+            client_id: "client".into(),
+            client_secret: "secret".into(),
+            redirect_uri: "http://localhost".into(),
+            auth_url: CONSUMERS_AUTH_URL.into(),
+            token_url: CONSUMERS_TOKEN_URL.into(),
+            graph_base_url: GRAPH_BASE_URL.into(),
+            encryption_key: [7u8; 32],
+            database_path: ":memory:".into(),
+            api_keys: HashMap::new(),
+            default_tenant_id: "default".into(),
+            api_bind_addr: "127.0.0.1:0".into(),
+            token_inactivity_days: 90,
+            refresh_interval_secs: 3600,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
