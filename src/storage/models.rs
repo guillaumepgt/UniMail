@@ -39,7 +39,7 @@ pub enum AccountStatus {
 
 impl AccountStatus {
     /// Parse from the stored string.
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse(s: &str) -> Self {
         match s {
             "disconnected" => AccountStatus::Disconnected,
             _ => AccountStatus::Active,

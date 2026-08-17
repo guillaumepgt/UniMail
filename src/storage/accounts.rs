@@ -185,7 +185,7 @@ fn query_accounts(
                 email_address: row.get(2)?,
                 display_name: row.get(3)?,
                 provider: row.get(4)?,
-                status: AccountStatus::from_str(&row.get::<_, String>(5)?),
+                status: AccountStatus::parse(&row.get::<_, String>(5)?),
                 created_at: row.get(6)?,
                 updated_at: row.get(7)?,
             })

@@ -84,8 +84,8 @@ impl TokenStore for SqliteTokenStore {
         let (access_blob, refresh_blob, scope, expires_at, last_used_at, updated_at) =
             row.map_err(|e| AppError::Storage(e.to_string()))?;
 
-        let access_token = decrypt(&self.key, &access_blob).map_err(|e| AppError::Storage(e))?;
-        let refresh_token = decrypt(&self.key, &refresh_blob).map_err(|e| AppError::Storage(e))?;
+        let access_token = decrypt(&self.key, &access_blob).map_err(AppError::Storage)?;
+        let refresh_token = decrypt(&self.key, &refresh_blob).map_err(AppError::Storage)?;
 
         Ok(Some(StoredToken {
             access_token: String::from_utf8(access_token)
@@ -101,9 +101,9 @@ impl TokenStore for SqliteTokenStore {
 
     fn upsert(&self, account_id: &str, token: &StoredToken) -> Result<()> {
         let access_blob = encrypt(&self.key, token.access_token.as_bytes())
-            .map_err(|e| AppError::Storage(e))?;
+            .map_err(AppError::Storage)?;
         let refresh_blob = encrypt(&self.key, token.refresh_token.as_bytes())
-            .map_err(|e| AppError::Storage(e))?;
+            .map_err(AppError::Storage)?;
 
         let conn = self
             .conn
