@@ -1,5 +1,12 @@
-//! UniMail binary entry point. See the `cli` module for subcommand handling.
+//! UniMail binary entry point.
+//!
+//! Parses CLI subcommands and delegates to [`unimail::cli`]. See `README.md`
+//! for usage, or run `cargo run -- --help`.
 
-fn main() {
-    eprintln!("UniMail: run with a subcommand (see `unimail --help`).");
+#[tokio::main]
+async fn main() {
+    if let Err(e) = unimail::cli::run().await {
+        eprintln!("error: {e}");
+        std::process::exit(1);
+    }
 }

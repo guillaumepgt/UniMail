@@ -35,6 +35,8 @@ struct CallbackState {
     manager: Arc<TokenManager>,
     /// When set (CLI mode), signals "one callback handled" to shut the server down.
     done: Arc<Mutex<Option<oneshot::Sender<()>>>>,
+    /// When set (CLI mode), receives the completed flow's outcome.
+    result: Option<Arc<Mutex<Option<Result<Account>>>>>,
 }
 
 /// Build a persistent callback router (used by the REST API server).
@@ -42,6 +44,7 @@ pub fn callback_router(manager: Arc<TokenManager>) -> Router {
     let state = CallbackState {
         manager,
         done: Arc::new(Mutex::new(None)),
+        result: None,
     };
     Router::new()
         .route("/", get(handle_callback))
@@ -49,15 +52,17 @@ pub fn callback_router(manager: Arc<TokenManager>) -> Router {
         .with_state(state)
 }
 
-/// Serve exactly one callback and then shut down (used by `add-account`).
+/// Serve exactly one callback, then return the connected account.
 pub async fn serve_callback_once(
     manager: Arc<TokenManager>,
     addr: std::net::SocketAddr,
-) -> Result<()> {
+) -> Result<Account> {
     let (tx, rx) = oneshot::channel::<()>();
+    let result: Arc<Mutex<Option<Result<Account>>>> = Arc::new(Mutex::new(None));
     let state = CallbackState {
         manager,
         done: Arc::new(Mutex::new(Some(tx))),
+        result: Some(result.clone()),
     };
     let app = Router::new()
         .route("/", get(handle_callback))
@@ -73,16 +78,31 @@ pub async fn serve_callback_once(
             let _ = rx.await;
         })
         .await
-        .map_err(|e| AppError::Io(std::io::Error::new(e.kind(), format!("callback server: {e}"))))
+        .map_err(|e| AppError::Io(std::io::Error::new(e.kind(), format!("callback server: {e}"))))?;
+
+    let outcome = result
+        .lock()
+        .expect("result slot poisoned")
+        .take()
+        .unwrap_or_else(|| Err(AppError::Auth("callback completed without a result".into())));
+    outcome
 }
 
 async fn handle_callback(
     State(state): State<CallbackState>,
     Query(params): Query<CallbackParams>,
 ) -> Response {
-    let response = complete_callback(state.manager.as_ref(), &params).await;
+    let result = complete_callback(state.manager.as_ref(), &params).await;
 
-    // In CLI mode, shut down after the first callback.
+    let response: Response = match &result {
+        Ok(account) => success_response(account),
+        Err(e) => error_response(&e.to_string()),
+    };
+
+    // Store the outcome (CLI mode) before signalling shutdown.
+    if let Some(slot) = &state.result {
+        *slot.lock().expect("result slot poisoned") = Some(result);
+    }
     if let Some(tx) = state.done.lock().expect("done channel poisoned").take() {
         let _ = tx.send(());
     }
@@ -90,7 +110,7 @@ async fn handle_callback(
     response
 }
 
-async fn complete_callback(manager: &TokenManager, params: &CallbackParams) -> Response {
+async fn complete_callback(manager: &TokenManager, params: &CallbackParams) -> Result<Account> {
     // The user denied consent, or Microsoft reported another error.
     if let Some(error) = &params.error {
         let detail = params
@@ -98,15 +118,16 @@ async fn complete_callback(manager: &TokenManager, params: &CallbackParams) -> R
             .as_deref()
             .map(|d| format!(" — {d}"))
             .unwrap_or_default();
-        return error_response(&format!("Authorization failed: {error}{detail}"));
+        return Err(AppError::Auth(format!(
+            "Authorization failed: {error}{detail}"
+        )));
     }
 
     match (&params.code, &params.state) {
-        (Some(code), Some(state)) => match manager.complete_flow(code, state).await {
-            Ok(account) => success_response(&account),
-            Err(e) => error_response(&e.to_string()),
-        },
-        _ => error_response("Missing code or state parameter in callback"),
+        (Some(code), Some(state)) => manager.complete_flow(code, state).await,
+        _ => Err(AppError::Auth(
+            "missing code or state parameter in callback".into(),
+        )),
     }
 }
 
