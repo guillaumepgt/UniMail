@@ -1,0 +1,9 @@
+/target
+.env
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.idea/
+*.iml
+.DS_Store

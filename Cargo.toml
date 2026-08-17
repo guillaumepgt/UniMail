@@ -1,0 +1,54 @@
+[package]
+name = "unimail"
+version = "0.1.0"
+edition = "2021"
+description = "Unified inbox SaaS that centralizes personal Microsoft (Outlook/Hotmail) accounts behind a REST API and an MCP server."
+authors = ["UniMail"]
+readme = "README.md"
+
+[dependencies]
+# Async runtime + web framework
+tokio = { version = "1", features = ["full"] }
+axum = { version = "0.8", features = ["macros"] }
+tower-http = { version = "0.6", features = ["trace", "cors"] }
+futures = "0.3"
+
+# OAuth 2.0 (Authorization Code + PKCE) against Microsoft identity platform
+oauth2 = { version = "5", features = ["reqwest"] }
+
+# HTTP client (rustls only, no OpenSSL)
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "gzip"] }
+
+# Storage: SQLite with bundled libsqlite3 (no system dependency)
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# Encryption of refresh tokens at rest (AES-256-GCM)
+aes-gcm = "0.10"
+rand = "0.8"
+sha2 = "0.10"
+base64 = "0.22"
+
+# Config / logging
+dotenvy = "0.15"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Serialization / error handling / misc
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+url = "2"
+async-trait = "0.1"
+
+# MCP server (official Rust SDK: rmcp)
+rmcp = { version = "3", features = ["server"] }
+schemars = "0.8"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
