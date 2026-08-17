@@ -1,0 +1,12 @@
+target
+.git
+.idea
+*.iml
+.env
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+Dockerfile
+.dockerignore
+README.md
