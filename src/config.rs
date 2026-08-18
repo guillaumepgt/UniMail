@@ -11,11 +11,15 @@ use crate::error::{AppError, Result};
 
 /// Microsoft identity platform endpoints for **personal (consumer) accounts**.
 ///
-/// Personal accounts MUST use the `consumers` authority — not `/common` and not
-/// a tenant id. App-only access is impossible for consumer accounts; every
-/// account must go through an interactive consent popup.
-const CONSUMERS_AUTH_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize";
-const CONSUMERS_TOKEN_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
+/// We use the `/common` authority rather than `/consumers`: it reliably signs
+/// in personal Microsoft accounts and is the endpoint that matches an app
+/// registered with `signInAudience = AzureADandPersonalMicrosoftAccount`.
+/// The `/consumers` endpoint rejects many consumer flows with
+/// `unauthorized_client: not enabled for consumers`. App-only access is
+/// impossible for consumer accounts; every account must go through an
+/// interactive consent popup.
+const COMMON_AUTH_URL: &str = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
+const COMMON_TOKEN_URL: &str = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
 
 /// Microsoft Graph base URL.
 const GRAPH_BASE_URL: &str = "https://graph.microsoft.com/v1.0";
@@ -45,6 +49,13 @@ pub struct Config {
     pub default_tenant_id: String,
     /// Address the REST API binds to.
     pub api_bind_addr: String,
+    /// Optional override for the OAuth callback bind address (host:port).
+    ///
+    /// By default the callback binds to the host/port derived from
+    /// `REDIRECT_URI`. In Docker the loopback-only bind is unreachable through
+    /// port mapping (docker-proxy forwards to the container's eth0), so
+    /// deployments set this to `0.0.0.0` — see docker-compose.yml.
+    pub callback_bind_addr: Option<String>,
     /// Refresh tokens unused for longer than this many days are renewed in the
     /// background so accounts stay connected.
     pub token_inactivity_days: i64,
@@ -67,14 +78,17 @@ impl Config {
             client_id,
             client_secret,
             redirect_uri,
-            auth_url: env("AUTH_URL").unwrap_or_else(|_| CONSUMERS_AUTH_URL.to_string()),
-            token_url: env("TOKEN_URL").unwrap_or_else(|_| CONSUMERS_TOKEN_URL.to_string()),
+            auth_url: env("AUTH_URL").unwrap_or_else(|_| COMMON_AUTH_URL.to_string()),
+            token_url: env("TOKEN_URL").unwrap_or_else(|_| COMMON_TOKEN_URL.to_string()),
             graph_base_url: env("GRAPH_BASE_URL").unwrap_or_else(|_| GRAPH_BASE_URL.to_string()),
             encryption_key,
             database_path: env("DATABASE_PATH").unwrap_or_else(|_| "./unimail.db".to_string()),
             api_keys,
             default_tenant_id: env("DEFAULT_TENANT_ID").unwrap_or_else(|_| "default".to_string()),
             api_bind_addr: env("API_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".to_string()),
+            callback_bind_addr: env("CALLBACK_BIND_ADDR")
+                .ok()
+                .filter(|v| !v.trim().is_empty()),
             token_inactivity_days: env("TOKEN_INACTIVITY_DAYS")
                 .ok()
                 .and_then(|v| v.parse().ok())
@@ -93,7 +107,16 @@ impl Config {
 
     /// Host/port the callback server should bind to, derived from the redirect
     /// URI so it always matches what Azure sends the browser back to.
+    ///
+    /// `CALLBACK_BIND_ADDR` overrides the bind host/port (e.g. `0.0.0.0` in
+    /// Docker, where loopback-only binds are unreachable through port mapping).
     pub fn callback_addr(&self) -> Result<(String, u16)> {
+        if let Some(addr) = &self.callback_bind_addr {
+            let addr: std::net::SocketAddr = addr
+                .parse()
+                .map_err(|e| AppError::Config(format!("invalid CALLBACK_BIND_ADDR '{addr}': {e}")))?;
+            return Ok((addr.ip().to_string(), addr.port()));
+        }
         let url = oauth2::RedirectUrl::new(self.redirect_uri.clone())
             .map_err(|e| AppError::Config(format!("invalid REDIRECT_URI: {e}")))?;
         let host = url
@@ -200,14 +223,15 @@ impl Config {
             client_id: "client".into(),
             client_secret: "secret".into(),
             redirect_uri: "http://localhost".into(),
-            auth_url: CONSUMERS_AUTH_URL.into(),
-            token_url: CONSUMERS_TOKEN_URL.into(),
+            auth_url: COMMON_AUTH_URL.into(),
+            token_url: COMMON_TOKEN_URL.into(),
             graph_base_url: GRAPH_BASE_URL.into(),
             encryption_key: [7u8; 32],
             database_path: ":memory:".into(),
             api_keys: HashMap::new(),
             default_tenant_id: "default".into(),
             api_bind_addr: "127.0.0.1:0".into(),
+            callback_bind_addr: None,
             token_inactivity_days: 90,
             refresh_interval_secs: 3600,
         }

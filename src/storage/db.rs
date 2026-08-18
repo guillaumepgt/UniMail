@@ -87,6 +87,15 @@ CREATE TABLE IF NOT EXISTS tokens (
 );
 
 CREATE INDEX IF NOT EXISTS idx_tokens_last_used ON tokens(last_used_at);
+
+CREATE TABLE IF NOT EXISTS oauth_flows (
+    state      TEXT PRIMARY KEY,
+    verifier   BLOB NOT NULL,
+    tenant_id  TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_oauth_flows_created_at ON oauth_flows(created_at);
 "#;
 
 fn migrate(conn: &Connection) -> Result<()> {

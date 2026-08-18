@@ -36,9 +36,10 @@ impl AppState {
         let tokens: Arc<dyn TokenStore> =
             Arc::new(SqliteTokenStore::new(db.shared(), config.encryption_key));
 
-        // Auth.
+        // Auth. Flows are persisted in SQLite so consent URLs survive
+        // process/container restarts (the verifier is encrypted at rest).
         let oauth = OAuthClient::new(&config, http.clone());
-        let flows = FlowStore::default();
+        let flows = FlowStore::new(db.clone(), config.encryption_key);
         let profile: Arc<dyn ProfileResolver> =
             Arc::new(GraphIdentityResolver::new(&config, http.clone()));
         let token_manager = Arc::new(TokenManager::new(

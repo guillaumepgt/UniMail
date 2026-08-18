@@ -7,11 +7,13 @@
 pub mod accounts;
 pub mod crypto;
 pub mod db;
+pub mod flows;
 pub mod models;
 pub mod tokens;
 
 pub use accounts::{AccountStore, SqliteAccountStore};
 pub use db::Database;
+pub use flows::{FlowError, FlowStore, PendingFlow};
 pub use models::{Account, AccountStatus};
 pub use tokens::{SqliteTokenStore, StoredToken, TokenStore};
 

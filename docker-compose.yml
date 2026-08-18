@@ -1,0 +1,40 @@
+# ---------------------------------------------------------------------------
+# UniMail — docker compose
+#
+# Usage:
+#   cp .env.example .env   # fill in CLIENT_ID, CLIENT_SECRET, ENCRYPTION_KEY, …
+#   docker compose up --build -d
+#
+# The .env file is passed straight into the container (env_file), and also used
+# by compose for variable substitution below.
+# ---------------------------------------------------------------------------
+
+services:
+  unimail:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: unimail:latest
+    container_name: unimail
+    restart: unless-stopped
+    # 8080 = REST API. 80 = OAuth callback (REDIRECT_URI=http://localhost, see
+    # README "Loopback-callback note"). Drop "80:80" if you connect accounts
+    # from the host instead.
+    ports:
+      - "8080:8080"
+      - "80:80"
+    volumes:
+      - unimail-data:/data
+    env_file:
+      - .env
+    environment:
+      # Container paths / defaults (overrides whatever .env contains).
+      DATABASE_PATH: /data/unimail.db
+      API_BIND_ADDR: 0.0.0.0:8080
+      # Bind the OAuth callback on all interfaces: docker-proxy forwards the
+      # mapped host port to the container's eth0, so a 127.0.0.1-only bind is
+      # unreachable (the API works either way — it already binds 0.0.0.0).
+      CALLBACK_BIND_ADDR: 0.0.0.0:80
+
+volumes:
+  unimail-data:

@@ -1,8 +1,9 @@
 //! OAuth 2.0 client for the Microsoft identity platform (personal accounts).
 //!
-//! Implements the Authorization Code + PKCE flow against the `consumers`
-//! authority. The client is a confidential "Web" app, so the client secret is
-//! sent in the token request body (`client_secret_post`).
+//! Implements the Authorization Code + PKCE flow against the Microsoft
+//! identity platform (`/common` authority). The client is a confidential
+//! "Web" app, so the client secret is sent in the token request body
+//! (`client_secret_post`).
 
 use chrono::{DateTime, Utc};
 use oauth2::basic::BasicClient;
@@ -16,9 +17,11 @@ use crate::config::Config;
 use crate::error::{AppError, Result};
 
 /// Scopes requested at consent time. `offline_access` yields a refresh token;
-/// the rest are the minimum needed to read/send mail and resolve identity.
-pub const SCOPES: [&str; 7] = [
+/// `User.Read` lets us resolve the account's email/name via Graph `/me`, and
+/// the rest cover reading/sending mail.
+pub const SCOPES: [&str; 8] = [
     "offline_access",
+    "User.Read",
     "Mail.Read",
     "Mail.ReadWrite",
     "Mail.Send",

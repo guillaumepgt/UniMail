@@ -32,7 +32,10 @@ COPY --from=builder /app/target/release/unimail /usr/local/bin/unimail
 # Persist the SQLite database outside the container image.
 VOLUME ["/data"]
 ENV DATABASE_PATH=/data/unimail.db \
-    API_BIND_ADDR=0.0.0.0:8080
+    API_BIND_ADDR=0.0.0.0:8080 \
+    # OAuth callback must bind 0.0.0.0 inside the container: docker-proxy
+    # forwards host ports to the container's eth0, not its loopback.
+    CALLBACK_BIND_ADDR=0.0.0.0:80
 
 # 8080 = REST API. 80 = OAuth callback (REDIRECT_URI=http://localhost). See
 # README for the loopback-callback deployment note.

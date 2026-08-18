@@ -5,11 +5,10 @@
 //! the storage traits and a [`ProfileResolver`].
 
 pub mod callback;
-pub mod flow;
 pub mod oauth;
 pub mod token;
 
 pub use callback::{callback_router, serve_callback_once};
-pub use flow::{FlowError, FlowStore, PendingFlow};
 pub use oauth::{OAuthClient, TokenSet, SCOPES};
+pub use crate::storage::flows::{FlowError, FlowStore, PendingFlow};
 pub use token::{ProfileResolver, RefreshOutcome, ResolvedIdentity, TokenManager};

@@ -93,7 +93,6 @@ async fn handle_callback(
     Query(params): Query<CallbackParams>,
 ) -> Response {
     let result = complete_callback(state.manager.as_ref(), &params).await;
-
     let response: Response = match &result {
         Ok(account) => success_response(account),
         Err(e) => error_response(&e.to_string()),

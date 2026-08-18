@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
 
-use crate::auth::flow::{FlowError, FlowStore};
+use crate::storage::flows::{FlowError, FlowStore};
 use crate::auth::oauth::OAuthClient;
 use crate::error::{AppError, Result};
 use crate::storage::models::{Account, AccountStatus};
@@ -76,8 +76,11 @@ impl TokenManager {
 
     /// Begin an OAuth flow for a tenant and return the consent URL to open.
     pub fn begin_flow(&self, tenant_id: &str) -> Result<url::Url> {
-        let (auth_url, verifier, _state) = self.oauth.authorize_url()?;
-        self.flows.insert(verifier, tenant_id.to_string());
+        let (auth_url, verifier, state) = self.oauth.authorize_url()?;
+        // The `state` embedded in the consent URL is the CSRF token the
+        // provider echoes back; it must be the same key we store the flow
+        // under, otherwise the callback can never match it.
+        self.flows.insert(verifier, tenant_id.to_string(), state);
         Ok(auth_url)
     }
 
@@ -87,6 +90,7 @@ impl TokenManager {
         let flow = self.flows.take(state).map_err(|e| match e {
             FlowError::UnknownState => AppError::Auth("unknown or already-used state".into()),
             FlowError::Expired => AppError::Auth("authorization flow expired".into()),
+            FlowError::Storage(msg) => AppError::Storage(msg),
         })?;
 
         let token_set = self.oauth.exchange_code(code, flow.verifier).await?;

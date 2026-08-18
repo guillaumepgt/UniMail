@@ -15,10 +15,13 @@ layered architecture.
 
 - **One unified inbox** — aggregate every connected account into a single,
   date-sorted feed, each message tagged with its owning account.
-- **OAuth 2.0 Authorization Code + PKCE** against the Microsoft
-  `consumers` authority (personal accounts only — no tenant, no app-only auth).
+- **OAuth 2.0 Authorization Code + PKCE** against the Microsoft identity
+  platform `/common` authority (personal accounts — no app-only auth).
 - **Encrypted storage** — refresh/access tokens are AES-256-GCM encrypted in
   SQLite using a master key from `.env`.
+- **Restart-proof OAuth flows** — pending PKCE flows (state + verifier) are
+  persisted in SQLite (verifier encrypted at rest), so a consent URL keeps
+  working across process/container restarts (10-minute TTL).
 - **Automatic refresh** — access tokens are refreshed transparently on expiry
   and on Graph `401`s; a background task renews accounts idle past a configurable
   threshold (default 90 days).
@@ -50,11 +53,13 @@ The storage schema stores only a `provider` discriminator string and an opaque
 ## Prerequisites
 
 - Rust (stable, 1.80+) — `rustup` recommended.
-- An Azure Entra ID app registration configured for **Personal Microsoft
-  accounts only**, with:
+- An Azure Entra ID app registration with **Supported account types =
+  "Accounts in any organizational directory and personal Microsoft accounts"**
+  (`signInAudience: "AzureADandPersonalMicrosoftAccount"` — **not** the
+  personal-only audience, which the `/consumers` endpoint rejects), with:
   - Platform: **Web**, Redirect URI: `http://localhost`
   - Delegated permissions: `Mail.Read`, `Mail.ReadWrite`, `Mail.Send`,
-    `offline_access`, `openid`, `profile`, `email`
+    `User.Read`, `offline_access`, `openid`, `profile`, `email`
   - A client secret (Web apps are confidential clients).
 
 > ⚠️ Personal (consumer) accounts **cannot** use app-only/client-credentials
@@ -86,6 +91,7 @@ openssl rand -hex 32   # paste the 64 hex chars into ENCRYPTION_KEY
 | `API_KEYS`              | Comma-separated `key=tenant` pairs (see below)       |
 | `DEFAULT_TENANT_ID`     | Tenant for keys/accounts without an explicit tenant  |
 | `API_BIND_ADDR`         | REST API listen address (default `0.0.0.0:8080`)     |
+| `CALLBACK_BIND_ADDR`    | OAuth callback bind address (default: derived from `REDIRECT_URI`; set `0.0.0.0:80` in Docker) |
 | `TOKEN_INACTIVITY_DAYS` | Renew idle accounts after N days (default 90)        |
 | `REFRESH_INTERVAL_SECS` | Background refresh period (default 21600)            |
 
@@ -209,10 +215,13 @@ docker run --rm -it -p 8080:8080 -v unimail-data:/data \
 
 **Loopback-callback note:** OAuth consent redirects the *browser* to
 `REDIRECT_URI` (`http://localhost`). For `POST /accounts/connect` to complete
-inside a container, map the callback port to the host too (`-p 80:80`) and keep
-`REDIRECT_URI=http://localhost`. Alternatively, connect accounts with
-`unimail add-account` on the host machine against the same `DATABASE_PATH`, and
-let the container only serve the API/MCP.
+inside a container, map the callback port to the host too (`-p 80:80`), keep
+`REDIRECT_URI=http://localhost`, and set `CALLBACK_BIND_ADDR=0.0.0.0:80`
+(already done in `docker-compose.yml` / the Dockerfile). Without that override
+the callback binds to the container's loopback only, which docker-proxy cannot
+reach — `POST /accounts/connect` returns an `auth_url` but the redirect dead-ends.
+Alternatively, connect accounts with `unimail add-account` on the host machine
+against the same `DATABASE_PATH`, and let the container only serve the API/MCP.
 
 ## Multi-tenancy
 
